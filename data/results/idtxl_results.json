@@ -1,0 +1,42 @@
+{
+  "task_id": "808c1bbe-c754-45be-80f3-41fcf21fa5d0",
+  "analysis_type": "idtxl",
+  "results": {
+    "transfer_entropy": {
+      "significant_connections": [
+        {
+          "source": "AAPL",
+          "target": "MSFT",
+          "strength": 0.23
+        },
+        {
+          "source": "GOOGL",
+          "target": "AAPL",
+          "strength": 0.18
+        }
+      ],
+      "max_lag": 5
+    },
+    "mutual_information": {
+      "matrix": [
+        [
+          1.0,
+          0.45
+        ],
+        [
+          0.45,
+          1.0
+        ]
+      ],
+      "variables": [
+        "AAPL",
+        "MSFT"
+      ]
+    }
+  },
+  "metadata": {
+    "created_at": "2025-07-31T20:22:56.803930",
+    "completed_at": "2025-07-31T20:23:01.805896",
+    "duration_seconds": 5.001966
+  }
+}

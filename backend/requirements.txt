@@ -1,0 +1,44 @@
+# FastAPI and web framework dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Data processing and analysis
+numpy==1.24.3
+pandas==2.0.3
+scipy==1.11.4
+
+# IDTxl and information theory  
+idtxl>=1.5.0
+jpype1>=1.4.1
+
+# Machine learning
+scikit-learn==1.3.2
+xgboost==2.0.3
+
+# Deep learning (optional - for neural network service)
+torch==2.1.0
+tensorflow==2.15.0
+
+# Financial data sources
+yfinance==0.2.28
+
+# Time and timezone handling
+pytz==2023.3.post1
+
+# Statistics and scientific computing
+statsmodels==0.14.0
+matplotlib==3.8.2
+networkx==3.2.1
+h5py==3.10.0
+mpmath==1.3.0
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+
+# Utilities
+python-multipart==0.0.6
+python-dotenv==1.0.0

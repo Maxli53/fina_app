@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(pip install:*)",
+      "Bash(python test:*)",
+      "WebFetch(domain:pwollstadt.github.io)",
+      "WebFetch(domain:github.com)",
+      "Bash(python:*)",
+      "Bash(python:*)",
+      "Bash(docker:*)",
+      "Bash(where docker)",
+      "Bash(curl:*)",
+      "Bash(del:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}
