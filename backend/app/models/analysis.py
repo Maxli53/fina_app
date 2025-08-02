@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional, Literal, Union
 from datetime import datetime
 from enum import Enum
 
@@ -17,11 +17,24 @@ class MLModelType(str, Enum):
     LOGISTIC_REGRESSION = "logistic_regression"
 
 
-class NNArchitecture(str, Enum):
+class ArchitectureType(str, Enum):
     LSTM = "lstm"
     GRU = "gru"
     CNN = "cnn"
     TRANSFORMER = "transformer"
+
+
+class PredictionTarget(str, Enum):
+    DIRECTION = "direction"
+    RETURNS = "returns"
+    VOLATILITY = "volatility"
+
+
+class ValidationStrategy(str, Enum):
+    TIME_SERIES_CV = "time_series_cv"
+    WALK_FORWARD = "walk_forward"
+    PURGED_CV = "purged_cv"
+    TRAIN_TEST_SPLIT = "train_test_split"
 
 
 class IDTxlConfig(BaseModel):
@@ -42,25 +55,28 @@ class IDTxlConfig(BaseModel):
 class MLConfig(BaseModel):
     """Configuration for ML models"""
     model_type: MLModelType
-    target_variable: Literal["direction", "returns", "volatility"] = "direction"
+    target: PredictionTarget = PredictionTarget.DIRECTION
     prediction_horizon: int = Field(1, ge=1, le=20)
-    features: List[str] = Field(..., min_items=1)
-    validation_strategy: Literal["time_series_cv", "walk_forward", "purged_cv"] = "time_series_cv"
+    features: Optional[List[str]] = None
+    validation: ValidationStrategy = ValidationStrategy.TIME_SERIES_CV
     test_size: float = Field(0.2, ge=0.1, le=0.5)
     
     # Model-specific hyperparameters
-    hyperparameters: Dict[str, Any] = Field(default_factory=dict)
+    hyperparameters: Optional[Dict[str, Any]] = None
 
 
 class NeuralNetworkConfig(BaseModel):
     """Configuration for neural networks"""
-    architecture: NNArchitecture
+    architecture: ArchitectureType
     layers: List[int] = Field(..., min_items=1, description="Units per layer")
+    dense_layers: List[int] = Field(default_factory=lambda: [64, 32])
     epochs: int = Field(100, ge=1, le=1000)
     batch_size: int = Field(32, ge=1, le=512)
     optimizer: Literal["adam", "sgd", "rmsprop"] = "adam"
     learning_rate: float = Field(0.001, ge=0.0001, le=0.1)
     dropout_rate: float = Field(0.2, ge=0, le=0.5)
+    early_stopping_patience: int = Field(10, ge=5, le=50)
+    batch_normalization: bool = False
     
     # Architecture-specific settings
     bidirectional: Optional[bool] = False  # For LSTM/GRU
@@ -111,21 +127,31 @@ class IDTxlResult(BaseModel):
 class MLResult(BaseModel):
     """Results from ML model training"""
     model_type: MLModelType
-    accuracy: float
-    precision: float
-    recall: float
-    f1_score: float
+    target: PredictionTarget
+    prediction_horizon: int
+    features: List[str]
+    hyperparameters: Optional[Dict[str, Any]]
+    validation_results: Dict[str, Any]
     feature_importance: Dict[str, float]
-    confusion_matrix: List[List[int]]
-    training_history: List[Dict[str, float]]
-    best_hyperparameters: Dict[str, Any]
+    final_metrics: Dict[str, float]
+    model_artifact: Any = Field(exclude=True)  # Exclude from serialization
+    training_data_info: Dict[str, Any]
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class NeuralNetworkResult(BaseModel):
     """Results from neural network training"""
-    architecture: NNArchitecture
-    final_loss: float
-    final_accuracy: float
-    training_history: Dict[str, List[float]]
-    validation_metrics: Dict[str, float]
-    model_summary: str
+    architecture: ArchitectureType
+    layers: List[int]
+    training_config: Dict[str, Any]
+    training_history: Dict[str, Any]
+    final_metrics: Dict[str, Optional[Dict[str, float]]]
+    model_artifact: Any = Field(exclude=True)  # Exclude from serialization
+    training_info: Dict[str, Any]
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        arbitrary_types_allowed = True

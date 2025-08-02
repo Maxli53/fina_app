@@ -3,13 +3,36 @@ import axios from 'axios';
 // API Configuration
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-export const api = axios.create({
+const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Add auth token to requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('access_token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
 
 // API Response Types
 export interface HealthResponse {
@@ -82,6 +105,7 @@ export interface IDTxlAnalysisResult {
 }
 
 // API Services
+// API Services
 export const healthService = {
   getHealth: (): Promise<HealthResponse> =>
     api.get('/api/health').then(res => res.data),
@@ -130,12 +154,3 @@ export const analysisService = {
   getAnalysisHistory: (): Promise<any[]> =>
     api.get('/api/analysis/history').then(res => res.data),
 };
-
-// Error handling interceptor
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    console.error('API Error:', error.response?.data || error.message);
-    return Promise.reject(error);
-  }
-);

@@ -1,0 +1,296 @@
+version: '3.8'
+
+services:
+  # Load Balancer / API Gateway
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: always
+    networks:
+      - app-network
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+    environment:
+      - REACT_APP_API_URL=https://api.yourdomain.com
+      - REACT_APP_WS_URL=wss://api.yourdomain.com/ws
+    volumes:
+      - frontend_static:/app/dist
+    networks:
+      - app-network
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+
+  # Backend API (Multiple Instances)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/financial_platform
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+      - SECRET_KEY=${SECRET_KEY}
+      - IBKR_USERNAME=${IBKR_USERNAME}
+      - IBKR_PASSWORD=${IBKR_PASSWORD}
+      - IQFEED_LOGIN=${IQFEED_LOGIN}
+      - IQFEED_PASSWORD=${IQFEED_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+      - db-network
+    restart: always
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Analysis Worker (GPU-enabled)
+  analysis_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    runtime: nvidia
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/financial_platform
+      - REDIS_URL=redis://redis:6379/0
+      - CUDA_VISIBLE_DEVICES=0
+      - TF_FORCE_GPU_ALLOW_GROWTH=true
+      - WORKER_TYPE=analysis
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - app-network
+      - db-network
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 16G
+
+  # Trading Engine (Critical Service)
+  trading_engine:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/financial_platform
+      - REDIS_URL=redis://redis:6379/0
+      - IBKR_USERNAME=${IBKR_USERNAME}
+      - IBKR_PASSWORD=${IBKR_PASSWORD}
+      - IQFEED_LOGIN=${IQFEED_LOGIN}
+      - IQFEED_PASSWORD=${IQFEED_PASSWORD}
+      - WORKER_TYPE=trading
+      - TRADING_MODE=${TRADING_MODE:-paper}
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - app-network
+      - db-network
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 8G
+
+  # PostgreSQL Primary
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=financial_platform
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - db-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+
+  # PostgreSQL Replica (Read-only)
+  postgres_replica:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=financial_platform
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_MASTER_SERVICE=postgres
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    networks:
+      - db-network
+    restart: always
+    depends_on:
+      - postgres
+
+  # Redis Cluster
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - db-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  # Redis Sentinel for HA
+  redis_sentinel:
+    image: redis:7-alpine
+    command: redis-sentinel /etc/redis-sentinel/sentinel.conf
+    volumes:
+      - ./redis/sentinel.conf:/etc/redis-sentinel/sentinel.conf
+    networks:
+      - db-network
+    restart: always
+    depends_on:
+      - redis
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring-network
+      - app-network
+    restart: always
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    networks:
+      - monitoring-network
+    restart: always
+    depends_on:
+      - prometheus
+
+  # Log Aggregation - Loki
+  loki:
+    image: grafana/loki:latest
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring-network
+    restart: always
+
+  # Log Shipper - Promtail
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./monitoring/promtail-config.yaml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring-network
+    restart: always
+
+  # Backup Service
+  backup:
+    image: postgres:15-alpine
+    environment:
+      - PGPASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh
+    entrypoint: ["/bin/sh", "-c", "while true; do /backup.sh; sleep 86400; done"]
+    networks:
+      - db-network
+    restart: always
+    depends_on:
+      - postgres
+
+networks:
+  app-network:
+    driver: bridge
+  db-network:
+    driver: bridge
+  monitoring-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  postgres_replica_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  frontend_static:

@@ -1,0 +1,189 @@
+groups:
+  - name: trading_alerts
+    interval: 30s
+    rules:
+      # Critical: Trading loss exceeds limit
+      - alert: TradingLossLimitExceeded
+        expr: trading_daily_pnl < -5000
+        for: 1m
+        labels:
+          severity: critical
+          team: trading
+        annotations:
+          summary: "Daily trading loss exceeds $5,000 limit"
+          description: "Current P&L: {{ $value }}. Immediate action required!"
+          action: "Halt all trading activities and review positions"
+
+      # Critical: Position size limit exceeded
+      - alert: PositionSizeLimitExceeded
+        expr: trading_position_value > 50000
+        for: 1m
+        labels:
+          severity: critical
+          team: trading
+        annotations:
+          summary: "Position size exceeds $50,000 limit"
+          description: "Position {{ $labels.symbol }} value: {{ $value }}"
+          action: "Reduce position size immediately"
+
+      # Warning: High order rejection rate
+      - alert: HighOrderRejectionRate
+        expr: rate(trading_orders_rejected_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: trading
+        annotations:
+          summary: "High order rejection rate detected"
+          description: "Rejection rate: {{ $value }} per second"
+          action: "Check order parameters and broker connectivity"
+
+      # Critical: No market data received
+      - alert: MarketDataStalled
+        expr: time() - market_data_last_update_timestamp > 60
+        for: 2m
+        labels:
+          severity: critical
+          team: data
+        annotations:
+          summary: "No market data updates for {{ $labels.symbol }}"
+          description: "Last update was {{ $value }} seconds ago"
+          action: "Check data provider connection and restart if needed"
+
+      # Warning: Analysis queue backlog
+      - alert: AnalysisQueueBacklog
+        expr: analysis_queue_depth > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: analysis
+        annotations:
+          summary: "Analysis queue backlog detected"
+          description: "Queue depth: {{ $value }} tasks"
+          action: "Scale up analysis workers or investigate bottleneck"
+
+      # Critical: Risk limit breach
+      - alert: RiskLimitBreach
+        expr: portfolio_var_95 > portfolio_var_limit
+        for: 1m
+        labels:
+          severity: critical
+          team: risk
+        annotations:
+          summary: "Portfolio VaR exceeds risk limit"
+          description: "Current VaR: {{ $value }}, Limit: {{ $labels.limit }}"
+          action: "Reduce portfolio risk immediately"
+
+      # Warning: Circuit breaker triggered
+      - alert: CircuitBreakerTriggered
+        expr: circuit_breaker_status == 1
+        for: 1m
+        labels:
+          severity: warning
+          team: trading
+        annotations:
+          summary: "Trading circuit breaker activated"
+          description: "Circuit breaker {{ $labels.breaker_type }} is active"
+          action: "Investigate trigger cause and reset when safe"
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # Critical: Service down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.instance }} has been down for more than 2 minutes"
+          action: "Check service logs and restart if necessary"
+
+      # Warning: High CPU usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage: {{ $value }}%"
+          action: "Investigate process load and scale if needed"
+
+      # Warning: High memory usage
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / node_memory_MemTotal_bytes) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage: {{ $value }}%"
+          action: "Check for memory leaks or scale up"
+
+      # Critical: Database connection pool exhausted
+      - alert: DatabaseConnectionPoolExhausted
+        expr: database_connections_active / database_connections_max > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value }}% of connections in use"
+          action: "Increase connection pool size or investigate connection leaks"
+
+      # Warning: GPU memory high
+      - alert: GPUMemoryHigh
+        expr: nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "GPU memory usage high on {{ $labels.gpu }}"
+          description: "GPU memory usage: {{ $value }}%"
+          action: "Reduce batch size or queue depth"
+
+  - name: business_alerts
+    interval: 60s
+    rules:
+      # Info: Daily profit target reached
+      - alert: DailyProfitTargetReached
+        expr: trading_daily_pnl > 10000
+        for: 1m
+        labels:
+          severity: info
+          team: trading
+        annotations:
+          summary: "Daily profit target of $10,000 reached!"
+          description: "Current P&L: ${{ $value }}"
+          action: "Consider reducing risk for the day"
+
+      # Warning: Low win rate
+      - alert: LowWinRate
+        expr: trading_win_rate < 0.4
+        for: 1h
+        labels:
+          severity: warning
+          team: trading
+        annotations:
+          summary: "Trading win rate below 40%"
+          description: "Current win rate: {{ $value }}%"
+          action: "Review trading strategy performance"
+
+      # Critical: Sharpe ratio degradation
+      - alert: SharpeRatioDegradation
+        expr: portfolio_sharpe_ratio < 0.5
+        for: 1d
+        labels:
+          severity: warning
+          team: trading
+        annotations:
+          summary: "Portfolio Sharpe ratio below threshold"
+          description: "Current Sharpe: {{ $value }}"
+          action: "Review strategy allocation and risk"
