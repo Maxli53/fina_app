@@ -40,6 +40,7 @@ class AnalysisContext:
     current_positions: Optional[List[Dict]] = None
     market_conditions: Optional[Dict] = None
     historical_performance: Optional[Dict] = None
+    additional_context: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -156,14 +157,38 @@ class GPTAdvisor:
             Analysis Context:
             {context_str}
             
-            Please provide PhD-level recommendations for:
-            1. Optimal analysis parameters and configuration
-            2. Key insights to look for in the results
-            3. Potential pitfalls and how to avoid them
-            4. Integration with other analysis methods
-            5. Trading strategy implications
+            Based on the specific configuration parameters provided, please provide PhD-level recommendations for:
             
-            Be specific and quantitative where possible.
+            1. Parameter Optimization:
+               - Review the current parameter values and suggest improvements
+               - For IDTxl: optimal lag, permutations, significance level for the specific symbols
+               - For ML: hyperparameters, validation strategy, feature selection
+               - For Neural Networks: architecture choices, layers, dropout, learning rate
+               - Explain WHY these parameters are optimal for this specific dataset
+            
+            2. Configuration Warnings:
+               - Identify any parameter combinations that may cause issues
+               - Statistical validity concerns (e.g., permutations vs significance level)
+               - Computational complexity warnings
+               - Overfitting risks based on data size and model complexity
+            
+            3. Expected Outcomes:
+               - What patterns should we expect to find with this configuration?
+               - Realistic performance expectations
+               - Key metrics to monitor
+            
+            4. Integration Recommendations:
+               - How to combine results from different analysis types
+               - Optimal weighting strategies for ensemble methods
+            
+            5. Next Steps:
+               - What analysis should follow based on expected results?
+               - How to translate findings into trading signals
+            
+            Please structure your response with specific recommendations, insights, and warnings.
+            Include an optimal_configuration object in your supporting data with suggested parameter values.
+            
+            Be specific, quantitative, and consider the financial time series context.
             """}
         ]
         
@@ -480,7 +505,7 @@ class GPTAdvisor:
     
     def _prepare_context_string(self, context: AnalysisContext) -> str:
         """Prepare context for AI consumption"""
-        return f"""
+        base_context = f"""
         Symbols: {', '.join(context.symbols)}
         Timeframe: {context.timeframe}
         Analysis Type: {context.analysis_type}
@@ -490,6 +515,18 @@ class GPTAdvisor:
         Current Positions: {len(context.current_positions or [])} positions
         Market Conditions: {context.market_conditions or 'Normal'}
         """
+        
+        # Include additional context if provided
+        if context.additional_context:
+            import json
+            additional_info = f"""
+        
+        Additional Configuration Details:
+        {json.dumps(context.additional_context, indent=2)}
+        """
+            base_context += additional_info
+            
+        return base_context
     
     def _parse_advisory_response(self, response: str, role: AdvisorRole) -> AdvisoryResponse:
         """Parse AI response into structured format"""
@@ -534,13 +571,45 @@ class GPTAdvisor:
         elif "low confidence" in response.lower():
             confidence = 0.60
         
+        # Try to extract optimal configuration from the response
+        optimal_config = {}
+        import re
+        
+        # Look for parameter recommendations in the text
+        param_patterns = [
+            (r'permutations[:\s]+(\d+)', 'permutations'),
+            (r'max[_\s]?lag[:\s]+(\d+)', 'maxLag'),
+            (r'significance[:\s]+([\d.]+)', 'significanceLevel'),
+            (r'k[_\s]?neighbors[:\s]+(\d+)', 'kNeighbors'),
+            (r'learning[_\s]?rate[:\s]+([\d.]+)', 'learning_rate'),
+            (r'batch[_\s]?size[:\s]+(\d+)', 'batch_size'),
+            (r'epochs[:\s]+(\d+)', 'epochs'),
+            (r'dropout[:\s]+([\d.]+)', 'dropout_rate'),
+            (r'n[_\s]?estimators[:\s]+(\d+)', 'n_estimators'),
+            (r'max[_\s]?depth[:\s]+(\d+)', 'max_depth'),
+        ]
+        
+        for pattern, param_name in param_patterns:
+            match = re.search(pattern, response, re.IGNORECASE)
+            if match:
+                try:
+                    value = float(match.group(1)) if '.' in match.group(1) else int(match.group(1))
+                    optimal_config[param_name] = value
+                except:
+                    pass
+        
+        supporting_data = {
+            "raw_response": response,
+            "optimal_configuration": optimal_config if optimal_config else None
+        }
+        
         return AdvisoryResponse(
             role=role,
             recommendations=recommendations,
             insights=insights,
             warnings=warnings,
             confidence_level=confidence,
-            supporting_data={"raw_response": response},
+            supporting_data=supporting_data,
             timestamp=datetime.utcnow()
         )
     

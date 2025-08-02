@@ -5,6 +5,36 @@ All notable changes to the Financial Time Series Analysis Platform will be docum
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-08-02
+
+### Changed
+
+#### AI Advisory System - Dynamic Recommendations
+- **Replaced hardcoded rules with true AI-powered analysis**
+  - Frontend now uses actual AI responses instead of static if-then rules
+  - Backend passes full configuration context to AI service (GPT-4/Claude)
+  - AI analyzes specific parameter combinations and provides tailored advice
+  
+- **Enhanced Analysis Context**
+  - Added `additional_context` field to AnalysisContext dataclass
+  - Full configuration details sent to AI for comprehensive analysis
+  - Improved prompt engineering for parameter-specific recommendations
+  
+- **Real-time Configuration Assistant**
+  - Analysis page displays AI recommendations that update as parameters change
+  - Debounced API calls for optimal performance
+  - Loading states and error handling for better UX
+  
+- **Optimal Configuration Extraction**
+  - AI responses parsed to extract suggested parameter values
+  - Support for all analysis types (IDTxl, ML, Neural Networks)
+  - Context-aware optimization based on dataset characteristics
+
+### Fixed
+- AI Advisor now provides PhD-level expertise based on actual analysis, not generic rules
+- Configuration recommendations are specific to symbols, timeframes, and parameter values
+- Removed misleading hardcoded advice that didn't consider actual configuration
+
 ## [1.0.0] - 2025-08-01
 
 ### 🎉 Initial Release - Complete Platform

@@ -414,6 +414,8 @@ const Analysis: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'idtxl' | 'ml' | 'neural' | 'integrated'>('idtxl');
   const [showAIAdvisor, setShowAIAdvisor] = useState(false);
+  const [quickAIRecommendation, setQuickAIRecommendation] = useState<string | null>(null);
+  const [isLoadingQuickAI, setIsLoadingQuickAI] = useState(false);
   
   // Optimization settings per tab
   const [idtxlOptimization, setIdtxlOptimization] = useState<OptimizationSettings>({});
@@ -550,6 +552,48 @@ const Analysis: React.FC = () => {
   const watchedModelType = mlForm.watch('modelType');
   const watchedArchitecture = nnForm.watch('architecture');
   const watchedKernel = mlForm.watch('kernel');
+  
+  // Fetch quick AI recommendations when configuration changes
+  useEffect(() => {
+    const fetchQuickRecommendation = async () => {
+      if (selectedSymbols.length === 0) return;
+      
+      setIsLoadingQuickAI(true);
+      try {
+        const currentConfig = activeTab === 'idtxl' ? { idtxl: idtxlForm.getValues() } :
+                            activeTab === 'ml' ? { ml: mlForm.getValues() } :
+                            activeTab === 'neural' ? { neural: nnForm.getValues() } :
+                            { integrated: integratedForm.getValues() };
+        
+        const response = await api.post('/api/ai-advisor/contextual-analysis', {
+          context: {
+            activeAnalysis: activeTab,
+            symbols: selectedSymbols,
+            dateRange: { start: '2024-01-01', end: '2024-12-31' },
+            ...currentConfig
+          },
+          requestType: 'quick_recommendation'
+        });
+        
+        if (response.data?.data?.insights?.length > 0) {
+          // Use the first insight as quick recommendation
+          setQuickAIRecommendation(response.data.data.insights[0]);
+        } else if (response.data?.data?.recommendations?.length > 0) {
+          // Or use the first recommendation
+          setQuickAIRecommendation(response.data.data.recommendations[0].text);
+        }
+      } catch (error) {
+        console.error('Error fetching quick AI recommendation:', error);
+        setQuickAIRecommendation(null);
+      } finally {
+        setIsLoadingQuickAI(false);
+      }
+    };
+    
+    // Debounce the API call
+    const timer = setTimeout(fetchQuickRecommendation, 1000);
+    return () => clearTimeout(timer);
+  }, [activeTab, selectedSymbols, watchedEstimator, watchedModelType, watchedArchitecture]);
 
   // Search symbols
   const { data: searchResults } = useQuery({
@@ -833,14 +877,16 @@ const Analysis: React.FC = () => {
               <div className="flex-1">
                 <h3 className="font-semibold text-blue-900">AI Configuration Assistant</h3>
                 <p className="text-sm text-blue-700 mt-1">
-                  Based on your selected {activeTab} analysis with {selectedSymbols.join(', ')} symbols,
-                  I recommend adjusting your configuration for optimal results. 
-                  {activeTab === 'idtxl' && watchedEstimator === 'kraskov' && 
-                    ' For Kraskov estimator with financial data, consider using k=5 neighbors for better bias-variance trade-off.'}
-                  {activeTab === 'ml' && watchedModelType === 'xgboost' && 
-                    ' XGBoost typically performs well with learning_rate=0.05 and max_depth=6 for financial time series.'}
-                  {activeTab === 'neural' && watchedArchitecture === 'lstm' && 
-                    ' For LSTM on financial data, bidirectional architecture with 2 layers of [128, 64] units often captures temporal patterns effectively.'}
+                  {isLoadingQuickAI ? (
+                    <span className="flex items-center">
+                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                      Analyzing your configuration...
+                    </span>
+                  ) : quickAIRecommendation ? (
+                    quickAIRecommendation
+                  ) : (
+                    `Based on your selected ${activeTab} analysis with ${selectedSymbols.join(', ')} symbols, I'm ready to provide personalized recommendations for your configuration.`
+                  )}
                 </p>
                 <button
                   onClick={() => {

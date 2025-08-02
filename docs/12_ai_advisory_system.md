@@ -10,17 +10,27 @@ The Financial Platform integrates a PhD-level AI advisory system powered by GPT-
 AI Advisory System
 ├── GPT Advisor Service
 │   ├── Multiple Advisory Roles
-│   ├── Context Management
-│   └── Response Parsing
+│   ├── Context Management (with full configuration awareness)
+│   └── Response Parsing (extracts optimal parameters)
 ├── API Endpoints
-│   ├── Analysis Configuration
+│   ├── Analysis Configuration (dynamic, context-aware)
 │   ├── Results Interpretation
 │   └── Interactive Consultation
 └── Frontend Integration
     ├── Chat Interface
-    ├── Analysis Assistant
+    ├── Analysis Assistant (real-time AI recommendations)
     └── Strategy Builder
 ```
+
+## Recent Improvements (August 2025)
+
+### Dynamic AI Recommendations
+The AI Advisory system now provides **true PhD-level expertise** instead of hardcoded rules:
+
+1. **Full Context Awareness**: AI receives complete configuration details including all parameter values
+2. **Real-time Analysis**: Configuration changes trigger immediate AI analysis
+3. **Parameter Optimization**: AI suggests optimal values based on specific dataset and objectives
+4. **No More Hardcoded Rules**: All recommendations come from actual AI analysis
 
 ## Advisory Roles
 
@@ -35,18 +45,33 @@ AI Advisory System
 
 **Use Cases:**
 ```python
-# Get analysis recommendations
+# Get analysis recommendations with full configuration context
 response = await advisor.get_analysis_recommendations(
     context=AnalysisContext(
         symbols=["AAPL", "MSFT", "GOOGL"],
         timeframe="1d",
-        analysis_type="comprehensive",
-        objectives=["maximize_returns", "find_correlations"],
+        analysis_type="idtxl",
+        objectives=["optimize_configuration", "maximize_signal_quality"],
         risk_tolerance="moderate",
-        capital=100000
+        capital=100000,
+        additional_context={
+            "active_analysis": "idtxl",
+            "configuration": {
+                "estimator": "kraskov",
+                "maxLag": 5,
+                "permutations": 200,
+                "significanceLevel": 0.05,
+                "kNeighbors": 4
+            }
+        }
     ),
     role=AdvisorRole.QUANT_ANALYST
 )
+
+# AI will analyze the specific configuration and return:
+# - Recommendations: "For significance level 0.05, increase permutations to at least 500"
+# - Insights: "Kraskov estimator with k=4 may underestimate MI, consider k=5-7"
+# - Optimal config: {"permutations": 500, "kNeighbors": 6}
 ```
 
 ### 2. Risk Manager
@@ -550,6 +575,77 @@ async def log_api_usage(user_id, tokens_used, cost):
         await notify_admin(f"User {user_id} exceeding AI budget")
 ```
 
+## Recent Improvements (August 2025)
+
+### Dynamic AI-Powered Recommendations
+
+The AI Advisory system has been significantly enhanced to provide true PhD-level expertise:
+
+#### Before (Hardcoded Rules)
+```javascript
+// OLD: Static rules in AIAdvisor.tsx
+if (idtxl.permutations < 500 && idtxl.significanceLevel < 0.01) {
+  recommendations.push({
+    text: 'For significance level < 0.01, increase permutations to at least 500',
+    priority: 'high'
+  });
+}
+```
+
+#### After (Dynamic AI Analysis)
+```javascript
+// NEW: Actual AI analysis
+const response = await api.post('/api/ai-advisor/contextual-analysis', {
+  context: analysisContext,  // Full configuration details
+  requestType: 'configuration_optimization'
+});
+
+// AI analyzes the specific configuration and returns tailored advice
+setAdvisoryResponse({
+  recommendations: response.data.data.recommendations,  // AI-generated
+  insights: response.data.data.insights,              // Context-aware
+  warnings: response.data.data.warnings,              // Specific to config
+  optimal_configuration: response.data.data.optimal_configuration
+});
+```
+
+### Key Improvements
+
+1. **Full Context Awareness**
+   - AI receives complete configuration parameters
+   - Analyzes specific symbol combinations
+   - Considers date ranges and data characteristics
+
+2. **Real-Time Updates**
+   - Configuration changes trigger immediate AI analysis
+   - Debounced API calls for performance
+   - Loading states for better UX
+
+3. **Academic Rigor**
+   - Recommendations based on statistical theory
+   - Citations to research when applicable
+   - Explanations of parameter interactions
+
+4. **Optimal Configuration Suggestions**
+   - AI extracts optimal values from its analysis
+   - Considers computational vs. accuracy tradeoffs
+   - Tailored to specific use cases
+
+### Frontend Integration
+
+The Analysis page now features:
+- Real-time AI recommendations that update as you type
+- Context-aware suggestions based on selected analysis type
+- Loading indicators while AI processes
+- Graceful error handling with fallbacks
+
+### Backend Enhancements
+
+- `AnalysisContext` now includes `additional_context` field
+- Full configuration passed to AI service
+- Enhanced prompt engineering for specific recommendations
+- Parameter extraction from AI responses
+
 ## Future Enhancements
 
 1. **Multi-Modal Analysis**: Incorporate chart images and audio
@@ -557,3 +653,5 @@ async def log_api_usage(user_id, tokens_used, cost):
 3. **Custom Model Fine-Tuning**: Domain-specific models
 4. **Automated Report Generation**: Scheduled insights
 5. **Voice Interface**: Natural language commands
+6. **Caching Layer**: Intelligent caching of common configurations
+7. **A/B Testing**: Compare AI vs rule-based recommendations

@@ -110,49 +110,53 @@ async def get_contextual_analysis(
         context = request.context
         active_analysis = context.get("activeAnalysis", "idtxl")
         
-        # Create analysis context
+        # Build comprehensive prompt for AI with full configuration details
+        config_details = {
+            "active_analysis": active_analysis,
+            "symbols": context.get("symbols", []),
+            "date_range": context.get("dateRange", {}),
+            "configuration": {}
+        }
+        
+        # Include the specific configuration based on active analysis
+        if active_analysis == "idtxl" and context.get("idtxl"):
+            config_details["configuration"] = context["idtxl"]
+        elif active_analysis == "ml" and context.get("ml"):
+            config_details["configuration"] = context["ml"]
+        elif active_analysis == "neural" and context.get("neural"):
+            config_details["configuration"] = context["neural"]
+        elif active_analysis == "integrated" and context.get("integrated"):
+            config_details["configuration"] = context["integrated"]
+        
+        # Create analysis context with full details
         analysis_context = AnalysisContext(
             symbols=context.get("symbols", []),
             timeframe=context.get("dateRange", {}).get("start", "1d"),
             analysis_type=active_analysis,
-            objectives=["optimize_configuration", "maximize_signal_quality"],
+            objectives=["optimize_configuration", "maximize_signal_quality", "financial_time_series_prediction"],
             risk_tolerance="moderate",
-            capital=100000.0
+            capital=100000.0,
+            additional_context=config_details  # Pass full configuration to AI
         )
         
-        # Get recommendations based on the analysis type
+        # Get AI recommendations based on the full context
         response = await advisor.advisor.get_analysis_recommendations(
             context=analysis_context,
             role=AdvisorRole.QUANT_ANALYST
         )
         
-        # Extract optimal configuration based on analysis type
-        optimal_config = {}
-        if active_analysis == "idtxl" and context.get("idtxl"):
-            optimal_config = {
-                "idtxl": {
-                    "maxLag": 10 if context["idtxl"].get("maxLag", 5) < 10 else context["idtxl"]["maxLag"],
-                    "permutations": 500 if context["idtxl"].get("permutations", 200) < 500 else context["idtxl"]["permutations"],
-                    "kNeighbors": 5 if context["idtxl"].get("estimator") == "kraskov" else None
-                }
-            }
-        elif active_analysis == "ml" and context.get("ml"):
-            optimal_config = {
-                "ml": {
-                    "testSize": 0.3 if context["ml"].get("validation") == "time_series_cv" else 0.2,
-                    "hyperparameters": {
-                        "learning_rate": 0.05,
-                        "n_boost_rounds": 200
-                    } if context["ml"].get("modelType") == "xgboost" else {}
-                }
-            }
-        elif active_analysis == "neural" and context.get("neural"):
-            optimal_config = {
-                "neural": {
-                    "batchSize": 64 if context["neural"].get("architecture") == "transformer" else 32,
-                    "bidirectional": True if len(context.get("symbols", [])) > 1 else False
-                }
-            }
+        # The AI service should now return optimal configuration based on its analysis
+        # Extract it from the response if available, otherwise use the AI's supporting data
+        optimal_config = response.supporting_data.get("optimal_configuration", {})
+        
+        # If AI didn't provide optimal config in supporting data, try to extract from recommendations
+        if not optimal_config and response.recommendations:
+            # Look for configuration-related recommendations
+            for rec in response.recommendations:
+                if "optimal" in rec.get("text", "").lower() or "configuration" in rec.get("text", "").lower():
+                    # AI might have included config in recommendation text
+                    optimal_config = rec.get("config", {})
+                    break
         
         return {
             "status": "success",
@@ -161,7 +165,8 @@ async def get_contextual_analysis(
                 "insights": response.insights,
                 "warnings": response.warnings,
                 "confidence_level": response.confidence_level,
-                "optimal_configuration": optimal_config
+                "optimal_configuration": optimal_config,
+                "ai_context": f"Analysis for {active_analysis} with {len(context.get('symbols', []))} symbols"
             },
             "timestamp": datetime.utcnow()
         }

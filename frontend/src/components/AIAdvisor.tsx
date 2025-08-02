@@ -360,135 +360,39 @@ export const AIAdvisor: React.FC<{
         requestType: 'configuration_optimization'
       });
 
-      const recommendations: Recommendation[] = [];
-      const insights: string[] = [];
-      const warnings: string[] = [];
-
-      // Generate specific recommendations based on context
-      if (analysisContext.activeAnalysis === 'idtxl') {
-        const idtxl = analysisContext.idtxl!;
+      // Use the actual AI response instead of hardcoded rules
+      if (response.data && response.data.data) {
+        const aiData = response.data.data;
         
-        if (idtxl.estimator === 'kraskov') {
-          recommendations.push({
-            text: `For ${analysisContext.symbols.join(', ')} with Kraskov estimator, k=${idtxl.kNeighbors} neighbors is ${idtxl.kNeighbors! < 5 ? 'low' : 'appropriate'} for financial time series. Consider k=5-7 for optimal bias-variance trade-off.`,
-            priority: idtxl.kNeighbors! < 5 ? 'high' : 'medium',
-            category: 'parameter_optimization'
-          });
-          
-          if (idtxl.noiseLevel! < 1e-8) {
-            warnings.push('Very low noise level may cause numerical instability in Kraskov estimator');
-          }
-        }
+        // Transform AI recommendations to match our Recommendation interface
+        const recommendations: Recommendation[] = aiData.recommendations?.map((rec: any) => ({
+          text: rec.text || rec.recommendation || rec,
+          priority: rec.priority || 'medium',
+          category: rec.category || 'general'
+        })) || [];
         
-        if (idtxl.maxLag > 10) {
-          insights.push('High lag values (>10) may capture long-term dependencies but increase computational complexity exponentially');
-        }
-        
-        if (idtxl.permutations < 500 && idtxl.significanceLevel < 0.01) {
-          recommendations.push({
-            text: 'For significance level < 0.01, increase permutations to at least 500 for reliable p-values',
+        setAdvisoryResponse({
+          recommendations,
+          insights: aiData.insights || [],
+          warnings: aiData.warnings || [],
+          confidence_level: aiData.confidence_level || 0.85,
+          optimal_configuration: aiData.optimal_configuration
+        });
+      } else {
+        // Fallback error handling
+        console.error('Invalid AI response format:', response.data);
+        setAdvisoryResponse({
+          recommendations: [{
+            text: 'Unable to generate AI recommendations. Please check your API configuration.',
             priority: 'high',
-            category: 'statistical_validity'
-          });
-        }
+            category: 'error'
+          }],
+          insights: [],
+          warnings: ['AI service returned an unexpected response format'],
+          confidence_level: 0,
+          optimal_configuration: null
+        });
       }
-      
-      else if (analysisContext.activeAnalysis === 'ml') {
-        const ml = analysisContext.ml!;
-        
-        if (ml.modelType === 'xgboost') {
-          recommendations.push({
-            text: `XGBoost with learning rate ${ml.hyperparameters?.learning_rate || 0.1} and ${ml.hyperparameters?.n_boost_rounds || 100} rounds. For financial data, try learning_rate=0.05 with 200-300 rounds for better generalization.`,
-            priority: 'high',
-            category: 'hyperparameter_tuning'
-          });
-        }
-        
-        if (ml.validation === 'time_series_cv' && ml.testSize < 0.2) {
-          warnings.push('Test size < 20% may not provide reliable out-of-sample performance estimates for time series');
-        }
-        
-        if (ml.target === 'volatility' && !ml.features?.technical_indicators?.includes('atr')) {
-          recommendations.push({
-            text: 'For volatility prediction, include ATR (Average True Range) in technical indicators',
-            priority: 'medium',
-            category: 'feature_engineering'
-          });
-        }
-      }
-      
-      else if (analysisContext.activeAnalysis === 'neural') {
-        const nn = analysisContext.neural!;
-        
-        if (nn.architecture === 'lstm' || nn.architecture === 'gru') {
-          if (!nn.bidirectional && analysisContext.symbols.length > 1) {
-            recommendations.push({
-              text: 'For multi-asset analysis, bidirectional LSTM/GRU can capture both forward and backward temporal dependencies',
-              priority: 'medium',
-              category: 'architecture'
-            });
-          }
-          
-          if (nn.layers && nn.layers[0] > 256) {
-            warnings.push('Large LSTM/GRU layers (>256 units) may lead to overfitting on financial data');
-          }
-        }
-        
-        if (nn.architecture === 'transformer') {
-          insights.push(`Transformer with ${nn.attentionHeads} heads and ${nn.encoderLayers} layers is computationally intensive. Ensure GPU acceleration is enabled.`);
-          
-          if (nn.batchSize < 32) {
-            recommendations.push({
-              text: 'Transformers benefit from larger batch sizes (64-128) for stable training',
-              priority: 'medium',
-              category: 'training'
-            });
-          }
-        }
-        
-        if (nn.dropoutRate > 0.5) {
-          warnings.push('High dropout rate (>0.5) may prevent the network from learning complex patterns');
-        }
-      }
-      
-      else if (analysisContext.activeAnalysis === 'integrated') {
-        const integrated = analysisContext.integrated!;
-        const totalWeight = (integrated.components.idtxl.weight + 
-                           integrated.components.ml.weight + 
-                           integrated.components.nn.weight);
-        
-        if (Math.abs(totalWeight - 1.0) > 0.01) {
-          warnings.push(`Component weights sum to ${totalWeight.toFixed(2)}, not 1.0. This may affect signal generation.`);
-        }
-        
-        if (integrated.ensembleMethod === 'stacking' && integrated.signalThreshold < 0.7) {
-          recommendations.push({
-            text: 'Stacking ensemble with low signal threshold (<0.7) may generate too many false signals',
-            priority: 'high',
-            category: 'signal_generation'
-          });
-        }
-      }
-
-      // General insights based on symbols and date range
-      const dateRange = analysisContext.dateRange;
-      const daysDiff = Math.floor((new Date(dateRange.end).getTime() - new Date(dateRange.start).getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (daysDiff < 365) {
-        insights.push('Less than 1 year of data may not capture full market cycles and seasonal patterns');
-      }
-      
-      if (analysisContext.symbols.includes('BTC') || analysisContext.symbols.includes('ETH')) {
-        insights.push('Cryptocurrency markets show 24/7 trading patterns - ensure your analysis accounts for weekend effects');
-      }
-
-      setAdvisoryResponse({
-        recommendations,
-        insights,
-        warnings,
-        confidence_level: 0.85,
-        optimal_configuration: response.data.optimal_configuration
-      });
     } catch (error) {
       console.error('Error generating recommendations:', error);
     } finally {
